@@ -1,0 +1,3 @@
+[submodule "submodule/world-cities"]
+	path = submodule/world-cities
+	url = https://github.com/datasets/world-cities
