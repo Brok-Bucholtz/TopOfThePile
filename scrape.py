@@ -40,9 +40,8 @@ def _finish_processing(database, job):
             'finished_processing': True}})
 
 
-def _setup_new_job(job, location, job_title):
+def _setup_new_job(job, location):
     job['search_location'] = [location]
-    job['search_title'] = [job_title]
     job['date'] = parser.parse(job['date']).timestamp()
     job['finished_processing'] = False
     job['email_sent'] = False
@@ -111,8 +110,7 @@ def scrape_indeed(database, indeed_client, logger, job_title, locations):
         new_jobs = {}
         update_jobs = {}
         result_start = 0
-        newest_job = database.jobs.find_one({'search_title': job_title, 'search_location': location},
-                                            sort=[('date', DESCENDING)])
+        newest_job = database.jobs.find_one({'search_location': location}, sort=[('date', DESCENDING)])
         indeed_response = indeed_client.search(**indeed_params, l=location, start=result_start)
         jobs = indeed_response['results']
         total_jobs = indeed_response['totalResults']
@@ -122,7 +120,7 @@ def scrape_indeed(database, indeed_client, logger, job_title, locations):
         else:
             if not newest_job:
                 # Set the first job
-                    new_jobs[jobs[0]['jobkey']] = _setup_new_job(jobs[0], location, job_title)
+                    new_jobs[jobs[0]['jobkey']] = _setup_new_job(jobs[0], location)
                     new_jobs[jobs[0]['jobkey']]['email_sent'] = True
             else:
                 while result_start < total_jobs and newest_job['date'] < parser.parse(jobs[0]['date']).timestamp():
@@ -131,7 +129,7 @@ def scrape_indeed(database, indeed_client, logger, job_title, locations):
                         if found_job:
                             update_jobs[found_job['jobkey']] = found_job
                         else:
-                            new_jobs[job['jobkey']] = _setup_new_job(job, location, job_title)
+                            new_jobs[job['jobkey']] = _setup_new_job(job, location)
 
                     result_start += indeed_params['limit']
                     jobs = indeed_client.search(**indeed_params, l=location, start=result_start)['results']
@@ -144,7 +142,7 @@ def scrape_indeed(database, indeed_client, logger, job_title, locations):
                     _update_array_fields(
                         database.jobs,
                         update_job,
-                        {'search_location': location, 'search_title': job_title})
+                        {'search_location': location})
             except Exception as error:
                 logger.error('Updating db for search_location {} scrape data failed: {}'.format(location, error))
 
