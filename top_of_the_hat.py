@@ -5,6 +5,7 @@ import logging
 from indeed import IndeedClient
 from pymongo import MongoClient
 
+from email_client import EmailClient
 from scrape import scrape_indeed, scrape_cities
 
 
@@ -39,9 +40,31 @@ def run():
         config_parser['DATABASE']['host'],
         int(config_parser['DATABASE']['port']))[config_parser['DATABASE']['Name']]
     indeed_api = IndeedClient(config_parser['INDEED']['PublisherNumber'])
+    email_client = EmailClient(
+        config_parser['EMAIL']['Host'],
+        config_parser['EMAIL']['Port'],
+        config_parser['EMAIL']['Username'],
+        config_parser['EMAIL']['Password'])
 
+    job_title = 'machine learning'
     cities = scrape_cities()
-    scrape_indeed(database, indeed_api, logger, 'machine learning', cities)
+    scrape_indeed(database, indeed_api, logger, job_title, cities)
+    found_jobs_query = {'finished_processing': True, 'email_sent': False, 'search_title': job_title}
+    found_jobs = list(database.jobs.find(found_jobs_query))
+    if found_jobs:
+        plural = 's' if len(found_jobs) > 1 else ''
+        html_message = '<html>{}</html>'.format(
+            '<br \>'.join(['<a href="{}">{}</a>'.format(job['url'], job['jobtitle']) for job in found_jobs]))
+        email_client.send(
+            config_parser['EMAIL']['FromAddress'],
+            config_parser['EMAIL']['ToAddress'],
+            'Top of the Hat: Found {} Job{}'.format(len(found_jobs), plural),
+            html_message)
+        try:
+            database.jobs.update_many(found_jobs_query, {'$set': {'email_sent': True}})
+        except Exception as error:
+            logger.error('Coudn\'t update database with emails sent')
+            raise error
 
 
 if __name__ == '__main__':
