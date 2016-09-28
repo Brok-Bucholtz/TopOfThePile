@@ -41,6 +41,12 @@ def _finish_processing(database, job):
 
 
 def _setup_new_job(job, location):
+    """
+    Set default values for a new job
+    :param job: The new job
+    :param location: The location the job was found
+    :return: The job with the default values added
+    """
     job['search_location'] = [location]
     job['date'] = parser.parse(job['date']).timestamp()
     job['finished_processing'] = False
