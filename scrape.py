@@ -1,11 +1,12 @@
 import csv
-
 import ipgetter
 import requests
 from os import path, makedirs
 
 from dateutil import parser
 from pymongo import DESCENDING
+
+from filter import job_matches_search
 
 
 def _update_array_fields(model, current_values, new_field_values):
@@ -25,11 +26,12 @@ def _update_array_fields(model, current_values, new_field_values):
         model.update_one({'_id': current_values['_id']}, {'$push': update_array_fields})
 
 
-def _finish_processing(database, job):
+def _finish_processing(database, job, search):
     """
     Finish processing scraped jobs
     :param database: Database to update the job
     :param job: Job to continue processing
+    :param search: Search term
     :return:
     """
     html_posting = requests.get(job['url']).content
@@ -37,7 +39,8 @@ def _finish_processing(database, job):
         {'_id': job['_id']},
         {'$set': {
             'html_posting': html_posting,
-            'finished_processing': True}})
+            'finished_processing': True,
+            'email_sent': not job_matches_search(search, job['jobtitle'], html_posting)}})
 
 
 def _setup_new_job(job, location):
@@ -156,4 +159,4 @@ def scrape_indeed(database, indeed_client, logger, job_title, locations):
     total_jobs = unprocessed_jobs.count()
     for job_i, job in enumerate(unprocessed_jobs):
         logger.debug('Processing job {:>3}/{:<3}'.format(job_i + 1, total_jobs))
-        _finish_processing(database, job)
+        _finish_processing(database, job, job_title)
