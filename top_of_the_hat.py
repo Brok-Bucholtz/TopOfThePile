@@ -19,6 +19,7 @@ def run():
     # Parse arguments
     arg_parser = ArgumentParser()
     arg_parser.add_argument('TaskType', help='The task to run', choices=['monitor_indeed'])
+    arg_parser.add_argument('--locations', help='Specify the locations to use', nargs='+', type=str)
     arg_parser.add_argument('--verbose', help='Verbose Mode', action='store_true')
     args = arg_parser.parse_args()
 
@@ -47,8 +48,8 @@ def run():
         config_parser['EMAIL']['Password'])
 
     job_title = 'machine learning'
-    cities = scrape_cities()
-    scrape_indeed(database, indeed_api, logger, job_title, cities)
+    locations = args.locations if args.locations else scrape_cities()
+    scrape_indeed(database, indeed_api, logger, job_title, locations)
     found_jobs_query = {'finished_processing': True, 'email_sent': False}
     found_jobs = list(database.jobs.find(found_jobs_query))
     if found_jobs:
