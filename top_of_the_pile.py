@@ -59,7 +59,7 @@ def run():
         email_client.send(
             config_parser['EMAIL']['FromAddress'],
             config_parser['EMAIL']['ToAddress'],
-            'Top of the Hat: Found {} Job{}'.format(len(found_jobs), plural),
+            'Top of the Pile: Found {} Job{}'.format(len(found_jobs), plural),
             html_message,
             config_parser['EMAIL']['UseSSL'].lower() == 'true')
         try:

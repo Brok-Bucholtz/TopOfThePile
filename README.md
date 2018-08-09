@@ -18,12 +18,12 @@ docker-compose up
 ```
 Run a task
 ```
-python3 top_of_the_hat.py <Task> (--locations locations) (--verbose)
+python3 top_of_the_pile.py <Task> (--locations locations) (--verbose)
 
 ```
 #### Example Tasks
 For example, to monitor new jobs in San Fransisco, San Jose, and Moution View, you would do the following:
 ```
-python3 top_of_the_hat.py monitor_indeed --locations "San Fransisco, California" "San Jose, California" "Moution View, California"
+python3 top_of_the_pile.py monitor_indeed --locations "San Fransisco, California" "San Jose, California" "Moution View, California"
 
 ```
