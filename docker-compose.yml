@@ -1,0 +1,13 @@
+version: "3"
+services:
+  db:
+    image: mongo
+    ports:
+      - 27017:27017
+    volumes:
+      - ./database/mongo:/data/db
+  mail:
+    image: mailhog/mailhog
+    ports:
+      - 1025:1025
+      - 8025:8025

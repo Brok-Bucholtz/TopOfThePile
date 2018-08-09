@@ -8,14 +8,18 @@ class EmailClient(object):
     """
     Email Client to manage connection information for SMTP server
     """
-    def __init__(self, host, port, username, password):
+    def __init__(self, host, port, username, password, use_ssl=False):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
+        self.use_ssl = use_ssl
 
     def _create_connection(self):
-        server = smtplib.SMTP_SSL(self.host, self.port)
+        if self.use_ssl:
+            server = smtplib.SMTP_SSL(self.host, self.port)
+        else:
+            server = smtplib.SMTP(self.host, self.port)
         server.ehlo()
         server.login(self.username, self.password)
 

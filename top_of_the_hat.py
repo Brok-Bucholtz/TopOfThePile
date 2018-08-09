@@ -60,7 +60,8 @@ def run():
             config_parser['EMAIL']['FromAddress'],
             config_parser['EMAIL']['ToAddress'],
             'Top of the Hat: Found {} Job{}'.format(len(found_jobs), plural),
-            html_message)
+            html_message,
+            config_parser['EMAIL']['UseSSL'].lower() == 'true')
         try:
             database.jobs.update_many(found_jobs_query, {'$set': {'email_sent': True}})
         except Exception as error:
