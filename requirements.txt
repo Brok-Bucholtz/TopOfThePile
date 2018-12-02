@@ -3,3 +3,4 @@ indeed
 ipgetter
 pymongo
 python-dateutil
+requests
