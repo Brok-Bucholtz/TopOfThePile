@@ -1,12 +1,66 @@
-from argparse import ArgumentParser
-from configparser import ConfigParser
+import csv
 import logging
 
+from argparse import ArgumentParser
+from configparser import ConfigParser
 from indeed import IndeedClient
+from os import path, makedirs
 from pymongo import MongoClient
 
 from topofthepile.email_client import EmailClient
-from topofthepile.scrape import scrape_indeed, scrape_cities
+from topofthepile.job_filter import MachineLearningJobFilter
+from topofthepile.job_search import IndeedJobSearch
+
+
+def scrape_cities():
+    """
+    Get list of cities in the United States with a population of at least 15,000
+    :return: Cities
+    """
+    cities = []
+    cities_file_path = './submodule/world-cities/data/world-cities.csv'
+    cache_folder_path = './cache/'
+    cities_cache_filename = 'world-cities.csv'
+
+    if not path.exists(cache_folder_path):
+        makedirs(cache_folder_path)
+    if not path.exists(cache_folder_path + cities_cache_filename):
+        # Read raw city data
+        with open(cities_file_path) as file:
+            reader = csv.reader(file)
+            for row in reader:
+                if row[1] == 'United States':
+                    cities.append(row[0] + ', ' + row[2])
+
+        # Cache formatted data
+        with open(cache_folder_path + cities_cache_filename, 'w+') as file:
+            writer = csv.writer(file)
+            for city in cities:
+                writer.writerow([city])
+    else:
+        # Read from cache
+        with open(cache_folder_path + cities_cache_filename) as file:
+            reader = csv.reader(file)
+            cities = [row[0] for row in reader]
+
+    return cities
+
+
+def update_array_fields(model, current_values, new_field_values):
+    """
+    Update all array fields if they don't contain the new values
+    :param model: DB Base Model
+    :param current_values: Dictionary of current values for model
+    :param new_field_values: Dictionary of new values that should be in arrays
+    :return:
+    """
+    array_fields = {}
+    for field, value in new_field_values.items():
+        if value not in current_values[field]:
+            array_fields[field] = value
+
+    if array_fields:
+        model.update_one({'_id': current_values['_id']}, {'$push': array_fields})
 
 
 def run():
@@ -49,7 +103,22 @@ def run():
 
     job_title = 'machine learning'
     locations = args.locations if args.locations else scrape_cities()
-    scrape_indeed(database, indeed_api, logger, job_title, locations)
+    indeed_job_search = IndeedJobSearch(database, indeed_api, logger)
+    ml_job_filter = MachineLearningJobFilter(database, logger)
+
+    for location in locations:
+        new_jobs, update_jobs = indeed_job_search.get_jobs(job_title, location)
+
+        database.jobs.insert_many(new_jobs.values())
+
+        for job_key, update_job in update_jobs.items():
+            update_array_fields(
+                database.jobs,
+                update_job,
+                {'search_location': location})
+
+    ml_job_filter.filter_jobs(job_title, database.jobs.find({'finished_processing': False}))
+
     found_jobs_query = {'finished_processing': True, 'email_sent': False}
     found_jobs = list(database.jobs.find(found_jobs_query))
     if found_jobs:
