@@ -5,8 +5,8 @@ import logging
 from indeed import IndeedClient
 from pymongo import MongoClient
 
-from email_client import EmailClient
-from scrape import scrape_indeed, scrape_cities
+from topofthepile.email_client import EmailClient
+from topofthepile.scrape import scrape_indeed, scrape_cities
 
 
 def run():

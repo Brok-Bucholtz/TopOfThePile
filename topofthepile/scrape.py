@@ -6,7 +6,7 @@ from os import path, makedirs
 from dateutil import parser
 from pymongo import DESCENDING
 
-from filter import job_matches_search
+from topofthepile.filter import job_matches_search
 
 
 def _update_array_fields(model, current_values, new_field_values):
