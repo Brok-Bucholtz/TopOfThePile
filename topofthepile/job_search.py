@@ -2,76 +2,54 @@ import abc
 import ipgetter
 
 from dateutil import parser
-from pymongo import DESCENDING
 
 
 class AbstractJobSearch(abc.ABC):
+    @property
     @abc.abstractmethod
-    def get_jobs(self, job_title, location):
+    def NAME(self):
+        raise NotImplemented()
+
+    @abc.abstractmethod
+    def get_new_jobs(self, job_title, location, min_date):
         raise NotImplemented()
 
 
 class IndeedJobSearch(AbstractJobSearch):
-    @staticmethod
-    def _setup_new_job(job, location):
-        """
-        Set default values for a new job
-        :param job: The new job
-        :param location: The location the job was found
-        :return: The job with the default values added
-        """
-        job['search_location'] = [location]
-        job['date'] = parser.parse(job['date']).timestamp()
-        job['finished_processing'] = False
-        job['email_sent'] = False
+    NAME = 'indeed'
 
-        return job
-
-    def __init__(self, database, indeed_client, logger):
-        self.database = database
+    def __init__(self, indeed_client, logger):
         self.indeed_client = indeed_client
         self.logger = logger
 
-    def get_jobs(self, job_title, location):
-        max_jobs = 25
-        sample_max_city_name_length = 35
-        result_start = 0
-        debug_log_string = 'Scraped location {:<' + str(sample_max_city_name_length) + '} found {:>3} jobs.'
+    def get_new_jobs(self, job_title, location, min_date=None):
+        jobs = []
+        max_job_chunks = 25
+        search_start = 0
         indeed_params = {
             'q': job_title,
-            'limit': max_jobs,
+            'limit': max_job_chunks,
             'latlong': 1,
             'sort': 'date',
             'userip': ipgetter.myip(),
-            'useragent': 'Python'
-        }
+            'useragent': 'Python'}
 
-        # Using a dicts instead of a list will prevent from adding duplicates
-        new_jobs = {}
-        update_jobs = {}
-
-        newest_job = self.database.jobs.find_one({'search_location': location}, sort=[('date', DESCENDING)])
-        indeed_response = self.indeed_client.search(**indeed_params, l=location, start=result_start)
-        jobs = indeed_response['results']
+        indeed_response = self.indeed_client.search(**indeed_params, l=location, start=search_start)
+        job_chunk = indeed_response['results']
         total_jobs = indeed_response['totalResults']
 
-        self.logger.debug(debug_log_string.format(location, len(jobs)))
-        if jobs:
-            if not newest_job:
-                # Set the first job
-                new_jobs[jobs[0]['jobkey']] = self._setup_new_job(jobs[0], location)
-                new_jobs[jobs[0]['jobkey']]['email_sent'] = True
-            else:
-                while result_start < total_jobs and newest_job['date'] < parser.parse(
-                        jobs[0]['date']).timestamp():
-                    for job in jobs:
-                        found_job = self.database.jobs.find_one({'jobkey': job['jobkey']})
-                        if found_job:
-                            update_jobs[found_job['jobkey']] = found_job
-                        else:
-                            new_jobs[job['jobkey']] = self._setup_new_job(job, location)
+        # Log
+        sample_max_city_name_length = 35
+        debug_log_string = 'Scraped location {:<' + str(sample_max_city_name_length) + '} found {:>3} jobs.'
+        self.logger.debug(debug_log_string.format(location, len(job_chunk)))
 
-                    result_start += indeed_params['limit']
-                    jobs = self.indeed_client.search(**indeed_params, l=location, start=result_start)['results']
+        if job_chunk:
+            while search_start < total_jobs and (
+                    not min_date or
+                    min_date < parser.parse(job_chunk[0]['date']).timestamp()):
+                jobs.extend(job_chunk)
 
-        return new_jobs, update_jobs
+                search_start += indeed_params['limit']
+                job_chunk = self.indeed_client.search(**indeed_params, l=location, start=search_start)['results']
+
+        return jobs

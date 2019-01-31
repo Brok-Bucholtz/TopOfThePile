@@ -38,3 +38,14 @@ class EmailClient(object):
 
         server.sendmail(from_address, to_address, message.as_string())
         server.close()
+
+    def email_jobs(self, jobs, from_address, to_address, use_ssl):
+        plural = 's' if len(jobs) > 1 else ''
+        html_message = '<html>{}</html>'.format(
+            '<br \>'.join(['<a href="{}">{}</a>'.format(job['url'], job['jobtitle']) for job in jobs]))
+        self.send(
+            from_address,
+            to_address,
+            'Top of the Pile: Found {} Job{}'.format(len(jobs), plural),
+            html_message,
+            use_ssl.lower() == 'true')

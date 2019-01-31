@@ -8,7 +8,7 @@ from os import path, makedirs
 from pymongo import MongoClient
 
 from topofthepile.email_client import EmailClient
-from topofthepile.job_filter import MachineLearningJobFilter
+from topofthepile.job import MachineLearningJob
 from topofthepile.job_search import IndeedJobSearch
 
 
@@ -44,23 +44,6 @@ def scrape_cities():
             cities = [row[0] for row in reader]
 
     return cities
-
-
-def update_array_fields(model, current_values, new_field_values):
-    """
-    Update all array fields if they don't contain the new values
-    :param model: DB Base Model
-    :param current_values: Dictionary of current values for model
-    :param new_field_values: Dictionary of new values that should be in arrays
-    :return:
-    """
-    array_fields = {}
-    for field, value in new_field_values.items():
-        if value not in current_values[field]:
-            array_fields[field] = value
-
-    if array_fields:
-        model.update_one({'_id': current_values['_id']}, {'$push': array_fields})
 
 
 def run():
@@ -101,38 +84,33 @@ def run():
         config_parser['EMAIL']['Username'],
         config_parser['EMAIL']['Password'])
 
-    job_title = 'machine learning'
     locations = args.locations if args.locations else scrape_cities()
-    indeed_job_search = IndeedJobSearch(database, indeed_api, logger)
-    ml_job_filter = MachineLearningJobFilter(database, logger)
+    ml_job = MachineLearningJob(database, logger)
+    indeed_job_search = IndeedJobSearch(indeed_api, logger)
 
     for location in locations:
-        new_jobs, update_jobs = indeed_job_search.get_jobs(job_title, location)
+        newest_job = ml_job.get_newest_job(location, indeed_job_search.NAME)
+        newest_date = newest_job['date'] if newest_job else None
+        new_jobs = indeed_job_search.get_new_jobs(ml_job.TITLE, location, newest_date)
 
-        database.jobs.insert_many(new_jobs.values())
+        # Log
+        sample_max_city_name_length = 35
+        debug_log_string = 'Scraped location {:<' + str(sample_max_city_name_length) + '} found {:>3} jobs.'
+        logger.debug(debug_log_string.format(location, len(new_jobs)))
 
-        for job_key, update_job in update_jobs.items():
-            update_array_fields(
-                database.jobs,
-                update_job,
-                {'search_location': location})
+        if new_jobs:
+            ml_job.add_jobs(new_jobs, location, indeed_job_search.NAME)
 
-    ml_job_filter.filter_jobs(job_title, database.jobs.find({'finished_processing': False}))
-
-    found_jobs_query = {'finished_processing': True, 'email_sent': False}
-    found_jobs = list(database.jobs.find(found_jobs_query))
-    if found_jobs:
-        plural = 's' if len(found_jobs) > 1 else ''
-        html_message = '<html>{}</html>'.format(
-            '<br \>'.join(['<a href="{}">{}</a>'.format(job['url'], job['jobtitle']) for job in found_jobs]))
-        email_client.send(
+    ml_job.process_all_jobs()
+    email_jobs = ml_job.get_jobs_for_email()
+    if email_jobs:
+        email_client.email_jobs(
+            email_jobs,
             config_parser['EMAIL']['FromAddress'],
             config_parser['EMAIL']['ToAddress'],
-            'Top of the Pile: Found {} Job{}'.format(len(found_jobs), plural),
-            html_message,
-            config_parser['EMAIL']['UseSSL'].lower() == 'true')
+            config_parser['EMAIL']['UseSSL'])
         try:
-            database.jobs.update_many(found_jobs_query, {'$set': {'email_sent': True}})
+            ml_job.set_emailed_jobs(email_jobs)
         except Exception as error:
             logger.error('Coudn\'t update database with emails sent')
             raise error
